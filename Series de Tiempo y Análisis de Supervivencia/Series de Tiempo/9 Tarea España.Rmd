@@ -1,0 +1,134 @@
+---
+title: "CONSUMO DE ENERGIA ESPAÑA 2021"
+author: |
+  | David Montaño Castro
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+  word_document: default
+header-includes:
+- \usepackage{enumitem}
+- \usepackage{caption}
+- \usepackage{amsmath}
+- \captionsetup{labelformat=empty}
+---
+
+```{r setup,echo=F}
+knitr::opts_chunk$set(echo=T, message=FALSE, warning=FALSE, 
+                      out.width='100%', fig.align='center', eval=T)
+```
+
+Se cuenta con la siguiente serie de datos correpondientes al consumo de energía en el año de 2021 de España. Se pretende ajustar un modelo ARIMA para predecir valores.
+
+```{r echo=F}
+library(astsa)
+library(forecast)
+library(TTR)
+library(tseries)
+setwd("C:/Users/actda/OneDrive/Documentos/SEMESTRE 2022-1/SERIES DE TIEMPO/Series de Tiempo")
+library(readxl)
+df <- read_excel("CONSUMO ENERGIA ESPAÑA 2021.xlsx", sheet = 2)
+attach(df)
+df.ts = ts(Energia, start = c(1967,1), frequency = 12)
+df.ts
+
+```
+
+Se observa un comportamiento estacional y una tendencia alsista a lo largo del tiempo. Recordar que para emplear un modelaje ARIMA es necesario que la serie tenga un comportamiento estacionario (media y varianza constante a lo largo del tiempo). Para ello, primero tienen que efectuarse algunas transformaciones. 
+
+```{r echo = F, out.width="50%"}
+plot(df.ts)
+```
+Primero, se aplicará una transformación logarítmica a los datos para disminuir la varianza de la serie. 
+
+```{r echo = F, out.width="50%"}
+dflog = log(df.ts)
+plot(dflog)
+
+```
+
+Para corregir el asunto de la tendencia, se puede efectuar una primera diferencia a los datos logarítmicamente ya transformados. 
+
+```{r echo = F, out.width="50%"}
+LOG_D1<-diff(dflog,lag=1,differences=1)
+plot(LOG_D1,type="l",col="blue",lwd=2)
+```
+Se observa que se ha logrado que la serie fluctue a lo largo de 0 y gracias a la transformación logarítmica su varianza a disminuido. Esto, graficamente, no puede asegurar que la serie sea estacionaria. 
+
+En R existe la función _nsdiffs()_ para saber cúantas diferencias tienen que ser aplicadas a la serie para lograr un comportamiento estacionario. 
+
+```{r}
+nsdiffs(LOG_D1)
+```
+Puesto que solo necesitamos una diferencia y ya la hemos aplicado, podríamos confiar en R y suponerla estacionaria...
+
+O también podemos emplear la __Prueba de Dickey-Fuller__ para ver si estadísticamente podemos afirmar que la serie tiene un comportamiento estacionario
+
+> "H0: La serie es no estacionaria vs Ha: La serie es estacionaria"
+
+```{r}
+adf.test(LOG_D1, alternative = "stationary")
+```
+
+Como el P-Value es menor a .05, se rechaza la hipótesis nula y la serie es estadísticamente estacionaria.
+
+Por otra parte aún se pueden observar ciclos en los que la serie fluctua. Esto se debe a los ciclos estacionales que podemos ver desde el inicio del análisis.
+
+Para ver de qué tamaño son estos ciclos estacionales, uno puede apoyarse de las funciones de _Autocorrelación__ y _Autocorrelación Parcial_.
+
+```{r echo = F, out.width="50%", comment=NA}
+acf2(LOG_D1, main = "Serie: Logarítmo y 1era diferencia")
+```
+
+Se aprecia que en el gráfico de autocorrelaciones existe un ciclo alternado cada 6 meses, mientras que en el gráfico de autocorrelaciones parciales se observa un comportamiento más bien con descenso exponencial.
+
+Para corregir esto, uno puede volver a sacar diferencias (sobre la diferencia con logarítmo).
+
+```{r echo = F, out.width="50%"}
+LOG_D1D12<-diff(LOG_D1,lag=12,differences=1)
+plot(LOG_D1D12,main="Serie con D1 y D12",lwd=2)
+
+```
+En la gráfica anterior ya no se logra distinguir ese comportamiento estacional del que se hablaba antes. 
+
+```{r, out.width="50%", comment=NA}
+acf2(LOG_D1D12, main = "Serie: Log, primera dif y segunda dif")
+```
+
+En clase se ajustó el siguiente modelo (el mejor que se encontró):
+
+$$ARIMA (0,1,1)(0,1,1)$$
+Sin embargo, R cuenta ya con una función que ajusta el mejor modelo con respecto a la métrica AIC.
+
+```{r}
+model=auto.arima(df.ts,stepwise=FALSE,approximation=FALSE) 
+summary(model)
+```
+
+Considerando este resultado, la estimación de clase y de R solo difieren en la parte estacional de medias moviles, pues R asigna 2 elementos autorregresivos estacionales en su lugar.
+
+Se tomará este modelo para hacer las estimaciones.
+
+```{r echo = F, out.width="50%"}
+plot(forecast(model,h=12), main = "Predicciones para modelo (0,1,1)(2,1,0)")
+```
+
+Una vez ajustado el modelo, se tiene que verificar que los residuales tengan una aparencia de ruido blanco, esto es, que en sus funciones de autocorrealción no hayan elementos significativos
+
+```{r echo = F, out.width="50%"}
+RESIDUAL<-residuals(model)
+plot(RESIDUAL,type="l")
+
+```
+
+De forma más análitica, por medio de la __Prueba de Ljung-Box__:
+
+> H0: Ruido blanco vs H1: No hay ruido blanco
+
+```{r}
+Box.test(RESIDUAL, type = "Ljung-Box")
+```
+
+Por lo tanto podemos concluir que los residuales se tratan puramente de ruido blanco.
+

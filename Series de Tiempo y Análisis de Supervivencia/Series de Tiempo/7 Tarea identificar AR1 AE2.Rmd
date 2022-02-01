@@ -1,0 +1,86 @@
+---
+title: 'Tarea 7: Identificar modelos AR1/AR2'
+author: "David Montaño Castro"
+date: "Modelos Autorregresivos"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup,echo=F}
+knitr::opts_chunk$set(echo=T, message=FALSE, warning=FALSE, 
+                      out.width='100%', fig.align='center', eval=T)
+```
+
+Dadas las series, encontrar si se trata de un modelo AR1 o AR2. Posteriormente, 
+calcular $\phi_1$ y $\phi_2$ en caso de tratarse de un modelo AR2.
+
+# Serie 1 
+```{r echo = F}
+# Librerias para AR
+library(tseries)
+
+library(astsa)
+
+library(TTR)
+
+library(knitr)
+
+# Leer archivos excel 
+library(readxl)
+S1 <- read_excel("7 Tarea Series.xlsx", col_types = c("numeric"))
+kable(head(S1,10), caption = "10 primeros registros")
+```
+
+
+La serie presenta cambios muy abruptos entre un valor al otro. Esto me dice que al menos uno de los coeficientes 
+es de __signo negativo__ (si se trata de AR2)
+```{r echo = F, fig.height=2.75}
+plot(S1$S1,type="l",main="Serie 1", xlab = "Índice", ylab = "Valor")
+```
+
+
+En __ACF__ se logra percibir un patrón parecido a cuando un coeficiente es negativo de un modelo AR.
+
+Sin embargo, el elemento más importante se puede visualizar en __PCAF__, pues es en esta representación en la que puedo observar que los dos primeros componentes sobresalen de los limites, prestando espcial atención en que el primero de ellos es positivo y el segundo, negativo. 
+```{r echo = F,results='hide',fig.keep='all'}
+acf2(S1$S1,30, main = "Autocorrelogramas S1")
+```
+
+Así, se llega a la conclusión de ajustar un modelo AR2.
+```{r echo = F}
+MODELO_AR2<-arima(S1$S1,order=c(2,0,0))
+MODELO_AR2$coef
+```
+
+Como se puede observar, el componente 2 es un valor _negativo_ como se presumía desde el inicio.
+
+\newpage
+# Serie 2
+
+```{r echo = F}
+S2 <- read_excel("7 Tarea Series.xlsx", col_types = c("numeric"), sheet = 2)
+kable(head(S2,10), caption = "10 primeros registros")
+```
+
+Claramente se trata de un modelo con coeficiente(s) __negativos__ por la inmensa cantidad de perturbaciones que presenta la serie.
+```{r echo = F, fig.height=2.75}
+plot(S2$S2,type="l",main="Serie 2", xlab = "Índice", ylab = "Valor")
+```
+
+En __ACF__ se logra percibir un patrón parecido a cuando un coeficiente es negativo de un modelo AR.
+
+Sin embargo, el elemento más importante se puede visualizar en __PCAF__, pues es en esta representación en la que puedo observar que solo el primer valor de autocorrelación parcial sobrepasa los límites. 
+```{r echo = F,results='hide',fig.keep='all'}
+acf2(S2$S2,30, main = "Autocorrelogramas S2")
+```
+
+
+
+Así, se llega a la conclusión de ajustar un modelo AR1.
+```{r echo = F}
+MODELO_AR2<-arima(S2$S2,order=c(1,0,0))
+MODELO_AR2$coef
+```
+
+Como puede observarse, el componente es __negativo__ como se discutía anteriormente. 
