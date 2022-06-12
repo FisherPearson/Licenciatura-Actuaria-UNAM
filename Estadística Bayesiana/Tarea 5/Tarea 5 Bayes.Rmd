@@ -1,0 +1,494 @@
+---
+title: " Métodos Lineales Generalizados: Regresión Logística Probit Bayesiana"
+author: |
+  | David Montaño Castro
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+  word_document: default
+header-includes:
+- \usepackage{enumitem}
+- \usepackage{caption}
+- \usepackage{amsmath}
+- \captionsetup{labelformat=empty}
+---
+
+```{r setup,echo=F}
+knitr::opts_chunk$set(echo=F, message=FALSE, warning=FALSE, 
+                      out.width='100%', fig.align='center', eval=T, comment = NA)
+```
+
+```{r}
+library(bayess)
+library(corrplot)
+library(polycor)
+library(glm2)
+library(rjags)
+library(coda)
+
+data("bank")
+attach(bank)
+```
+
+
+
+Para el conjunto de datos _bank_, del paquete _bayess_. Resolver los incisos:
+
+  1. __Estima un modelo probit__ . Justifica las distribuciones iniciales utilizadas. Obtén las estimaciones de los parámetros. Interpreta los resultados. 
+  
+  2. __Incluye las estimaciones usando JAGS__. Simula 2 o 3 cadenas MCMC, explica los resultados para garantizar la convergencia. Compara los resultados con el esquema de datos aumentados (incluyendo variables latentes)
+  
+# Introducción: Análisis Frecuentista
+
+De primera mano, iniciaré analizando rápidamente la información que se va a estudiar. 
+
+
+### Descripción de variables.
+
+200 tuplas con 5 columnas: 
+
+ - x1 length of the bill (in mm)
+ - x2 width of the left edge (in mm)
+ - x3 width of the right edge (in mm)
+ - x4 bottom margin width (in mm)
+ - y response variable
+
+
+### Resumen de los datos.
+
+```{r}
+# Resumen de los datos
+summary(bank)
+```
+
+Lo más importante a destacar son los valores que toma la variable "y": 1 y 0. Esto inmediatamente da luz del porqué se pide una regresión logística (con liga probit).
+
+Sin entrar en más detalles, las variables independientes son continuas y, si se compara el valor máximo y mínimo de cada una de ellas, noto que no existe una varianza tan grande. 
+
+Un hecho muy importante a observar es que la varaible _x2_ y _x3_ parecieran tener una distribución muy similar, pues su similitud llega al nivel de cuartiles. 
+
+### Valores NaN
+
+```{r}
+# na's
+table(is.na(bank)) # No hay Nas
+```
+
+No hay valores faltantes presentes en el conjunto de datos.
+
+### Proporción en la variable respuesta "y".
+
+```{r}
+# Proporción de variables respuesta
+table(y) # Hay 50% / 50%
+```
+
+La variable respuesta está bien balanceada, pues contiene 50% de valores positivos y 50% de negativos. 
+
+
+### Correlograma
+
+```{r}
+# Correlograma
+cor_tabl = hetcor(bank)
+corrplot(cor_tabl$correlations, type = "upper", diag = F)
+```
+Analizando la variable respuesta "y":
+
+ + Y tiene una fuerte relación con casi todas las variables independientes, en menor medida con __x1__, pues su correlación puede llegar a ser despreciable. En contraparte, _x4_ es la variable con quien mayor correlación tiene. 
+
+Analizando las correlaciones entre las variables independientes:
+
+ + Como venía presumiendo desde le inicio, _x2_ y _x3_ presentaban una distribución muy similar y por lo tanto, su correlación es demasiado alta. Esto, sin duda alguna, generará un conflicto en la regresión por multicolinealidad. No se puede presumír que variable será mejor conservar hasta ver como se comportan en conjunto. Fuera de este par, todas las demás no presentan este suceso. 
+
+
+# Modelos Frecuentistas.
+
+Para poder sugerir los hiperparámetros de las distribuciones _a priori_, un buena buena aproximación es obtener los posibles valores a partir de modelos frecuentistas. 
+
+Se ajustarán 4 modelos. A medida que se van interpretando los resultados de cada uno, se precederá a realizar modificaciones en el modelo en aras de encontrar un mejor ajuste. Se utilizará un valor de riesgo del .05.
+
+### Modelo Saturado
+
+```{r echo = T}
+regP1 = glm(y ~., data = bank, family = binomial(link = "probit"))
+summary(regP1)
+```
+
+Aparentemente, los resultados concuerdan con lo descrito en la sección anterior.
+
+- __Coeficientes__: 
+
+  + Tanto _(intercept)_ como _x2_ son variables estadísticamente no significativas.
+  + _x3_ es significativa pero, francamente, el p-valor está muy cercano al nivel de riesgo como para considerarlo signiicativo. Para sacar una mejor conclusión, se prestará más atención a él en el siguiente modelo. 
+  + _x1_ y _x4_ resultan ser las varaibles con mayor poder predictivo. No era de esperarse que la segunda lo fuera, pues su correlación es muy fuerte con respecto a "y". 
+ 
+- __Devianza__:
+
+  + La devianza nula es mucho mayor respecto a la residual. 
+
+__Conclusión__:
+
+Se decide calcular otro modelo sin la variable _x2_. 
+
+### Modelo ( _x1_, _x3_, _x4_)
+
+```{r echo = T}
+regP2 = glm(y ~ x1 + x3 + x4, data = bank, family = binomial(link = "probit"))
+summary(regP2)
+```
+
+- __Coeficientes__: 
+
+  + Es ahora la variable _x1_ la que no es significativa para el modelo. Esto también concuerdacon lo comentado en la sección anterior, pues su correlación con "y" es bastante decadente. 
+  + En este modelo _x3_ ya muestra significancia muy fuerte para el modelo. Esto puedo atribuirselo a la correlación que antes presentaba con _x2_ y de ahí su mal desempeño. _x4_ sigue siendo candidata para variable independiente.  
+
+- __Devianza__:
+
+  + La devianza nula es mucho mayor respecto a la residual, aunque 3 unidades mayor que el modelo anterior. 
+
+__Conclusión__:
+
+Se decide calcular otro modelo sin la variable _x1_. 
+
+
+
+### Modelo ( _x3_, _x4_)
+
+```{r echo = T}
+regP3 = glm(y ~ x3 + x4, data = bank, family = binomial(link = "probit"))
+summary(regP3)
+```
+
+- __Coeficientes__: 
+
+  + Todos los coeficientes muestran una significancia fuerte, incluso _(intercept)_.
+ 
+- __Devianza__:
+
+  + La devianza nula es mucho mayor respecto a la residual. Se aumentó en 3 unidades la residual respecto al segundo modelo. Si se realiza la prueba de chí cuadrado se obtiene un p-valor de `r pchisq(277.259 - 96.221, 3, lower.tail = F)`, cuyo valor definitivamente retrata un modelo con bastante poder predictivo. 
+
+__Conclusión__:
+
+Se decide calcular otro modelo con solamente _x4_ solo para corroborar que el presente es el mejor.  
+
+\pagebreak
+
+### Modelo ( _x4_ )
+
+```{r echo = T}
+regP4 = glm(y ~ x4, data = bank, family = binomial(link = "probit"))
+summary(regP4)
+```
+
+Pese que todos los coeficientes son significativos, la devianza aumenta 10 unidades. No obstante, el AIC también lo hace respecto a los otros modelos. Parsimoniosamente hablando, este modelo trabaja con una sola variable independiente, pero su poder predictivo no es tan fuerte como en el anterior. 
+
+__Conclusión__: El mejor modelo es el tercero. Con el se trabajará para proponer coeficientes a priori. 
+
+
+## Modelo ganador ( _x3_, _x4_)
+
+### Interpretación de los parámetros.
+
+Las variables que explican la variable de respuesta son :
+
+  - ancho del extremo derecho _x3_: Mientras más ancho sea el extremo derecho, mayor es la probabilidad de y = 1.
+  - ancho del margen inferior _x4_: Mientras más ancho sea el extremo inferior, mayor es la probabilidad de y = 1.
+
+### Intervalos de confianza.
+
+```{r}
+# Intervalos de confianza 
+confint(regP3)
+```
+
+Adicionalmente en los intervalos de confianza se confirma la significancia estadística al no estar contenido el 0 en alguno de los intervalos creados para los coeficientes calculados. 
+
+### Matriz de confusión. 
+
+```{r}
+predicted_frequentist = ifelse(regP3$fitted.values >= 0.5, 1, 0)
+
+# Matriz de confusión
+table(y, predicted_frequentist)
+```
+
+Accuracy (Cuánto clasifiqué bien de todo) = `r (91+92) * 100 /200`%.
+
+# Modelo Bayesiano
+
+Simularé un modelo bayesiano para compararlo con el modelo frecuentista analizado anteriormente. Voy a generar 3 cadenas.
+
+Como dije en la sección anterior, puedo ocupar las estimaciones que el modelo frecuentista dio para hacer que la cadena pueda converger más rápido. 
+
+Las distribuciones prior que utilizaré para los parámetros (Beta1, Beta2 y Constante) serán normales. Todas son distribuciones normales porque las betas del modelo logístico están calculadas como si fuera un modelo lineal, solo que se mete la liga para hacer la respectiva transformación a probabilidades. La normalidad se sigue del mismo hecho en el que se asume normal el término aleatorio.
+
+Como primer intento, voy a ajustar un modelo en el que ocupe ditribuciones priori normales poco informativas, es decir, Normal(0,1).
+
+### Modelo Bayesiano con prioris Normal(0,1)
+
+```{r echo = T}
+n = length(y)
+
+
+data = list(
+  y = y,
+  x3 = x3,
+  x4 = x4,
+  n = n
+)
+
+params = c("Constante", "Beta1", "Beta2")
+
+inits = function(){list(
+  "Constante" = rnorm(1),
+  "Beta1" = rnorm(1),
+  "Beta2" = rnorm(1)
+)
+}
+
+modelo = "model{
+
+#### LIKELIHOOD
+
+for(i in 1:n){
+
+eta[i] = Constante + Beta1 * x3[i] + Beta2 * x4[i]
+probit(p[i]) = eta[i]
+y[i] ~dbern(p[i])
+
+}
+
+#### PRIORS
+
+Beta1 ~ dnorm(0,1) #  1.6579
+Beta2 ~ dnorm(0,1) # 1.1317
+Constante ~ dnorm(0,1) # -225.9755
+
+
+}
+"
+set.seed(8)
+fit = jags.model(file = textConnection(modelo), data = data, inits = inits, n.chains = 3 )
+
+set.seed(8)
+update(fit, 6000)
+
+set.seed(8)
+sample = coda.samples(fit, params, n.iter = 15000, thin = 1)
+
+plot(sample)
+```
+Las gráficas de las simulaciones se miran bien, pues dan pinta de que estas convergen. 
+
+```{r}
+summary(sample)
+```
+
+Bajo este modelo, se observa que al menos los valores de _Beta1_ y _Constante_ son diferentes a los calculador por la regresión frecuentista. Incluso el valor _Constante_ sale no significativo pues con probabilidad 0.95 el HDI contiene al 0. 
+
+
+### Matriz de confusión.
+
+```{r}
+xj1 = cbind(rep(1,n),x3,x4)
+aux_j1 = colMeans(do.call(rbind,sample))
+aux_params_j1 = c(aux_j1[3],aux_j1[1:2])
+yhat = drop(xj1 %*% aux_params_j1)
+probas_j1 = pnorm(yhat) 
+
+# Matriz de confusión
+jags.aux.j1 = ifelse(probas_j1 >= 0.5,1,0)
+
+table(y, jags.aux.j1) # Igual que el frecuentista
+
+```
+
+Los resultados son similares, pero estríctamente no mejores que el modelo frecuentista. Esto debido al posible ruido que causa bajo este modelo la variable _Constante_.
+
+### Modelo Bayesiano con a priori normales con media parámetros frecuentistas.
+
+Ahora, se calculará otra versión en el que se utilicen como medias de las normales a priori los valores proporcionados por la regresión frecuentista, donde:
+
+  - Constate ~ Normal(-225.9755,1)
+  - Beta1 ~ Normal(1.6579,1)
+  - Beta2 ~ Normal(1.1317,1)
+  
+
+```{r echo = T}
+n = length(y)
+
+
+data = list(
+  y = y,
+  x3 = x3,
+  x4 = x4,
+  n = n
+)
+
+params = c("Constante", "Beta1", "Beta2")
+
+inits = function(){list(
+  "Constante" = rnorm(1),
+  "Beta1" = rnorm(1),
+  "Beta2" = rnorm(1)
+)
+}
+
+modelo = "model{
+
+#### LIKELIHOOD
+
+for(i in 1:n){
+
+eta[i] = Constante + Beta1 * x3[i] + Beta2 * x4[i]
+probit(p[i]) = eta[i]
+y[i] ~dbern(p[i])
+
+}
+
+#### PRIORS
+
+Beta1 ~ dnorm(1.6579,1) #  
+Beta2 ~ dnorm(1.1317,1) # 
+Constante ~ dnorm(-225.9755,1) # 
+
+
+}
+"
+set.seed(8)
+fit = jags.model(file = textConnection(modelo), data = data, inits = inits, n.chains = 3 )
+
+set.seed(8)
+update(fit, 7000)
+
+set.seed(8)
+sample = coda.samples(fit, params, n.iter = 20000, thin = 1)
+
+plot(sample)
+```
+Las gráficas no son del todo convincentes en cuanto a la convergencia de las distribuciones. 
+
+```{r}
+summary(sample)
+```
+
+Observar que ahora las estimaciones son más parecidas a las del ajuste frecuentista. En este caso, _Constante_ ya es estadísticamente significativo para el modelo. 
+
+```{r}
+# Convergencia
+gelman.plot(sample) # Todas convergen
+```
+
+La gráfica de Gelman confirma que las simulaciones si convergen pese a la confusa distribución que se muestra en sus trazas. 
+
+### Matriz de confunsión.
+
+```{r}
+xj1 = cbind(rep(1,n),x3,x4)
+aux_j1 = colMeans(do.call(rbind,sample))
+aux_params_j1 = c(aux_j1[3],aux_j1[1:2])
+yhat = drop(xj1 %*% aux_params_j1)
+probas_j1 = pnorm(yhat) 
+
+# Matriz de confusión
+jags.aux.j1 = ifelse(probas_j1 >= 0.5,1,0)
+
+table(y, jags.aux.j1) # Igual que el frecuentista
+
+```
+
+Se obtienen los mismos resultados que con el modelo frecuentista.
+
+### Modelo Bayesiano con a priori normales con media parámetros frecuentistas y variable latente.
+
+En este modelo se suponen las mismas distribuciones pero se agregará una variable latente. 
+
+```{r echo=T}
+inits2 = function(){list(
+  "Constante" = rnorm(1),
+  "Beta1" = rnorm(1),
+  "Beta2" = rnorm(1),
+  "z" = rep(0,n)
+)}
+
+
+modelo2 = "model{
+
+#### LIKELIHOOD
+
+for(i in 1:n){
+
+eta[i] = Constante + Beta1 * x3[i] + Beta2 * x4[i]
+z[i] ~ dnorm(eta[i], 1)
+p[i] = step(z[i]) * 0.99999999
+y[i] ~ dbern(p[i])
+
+}
+
+#### PRIORS
+
+Beta1 ~ dnorm(1.6579,1) # Con uno funciona bien en todas
+Beta2 ~ dnorm(1.1317,1)
+Constante ~ dnorm(-225.9755,1)  
+
+
+}
+"
+set.seed(8)
+fit2 = jags.model(file = textConnection(modelo2), data = data, inits = inits2, n.chains = 3 )
+
+set.seed(8)
+update(fit2, 7000)
+
+set.seed(8)
+sample2 = coda.samples(fit2, params, n.iter = 20000, thin = 1)
+
+
+plot(sample2)
+
+```
+Las trazas no se ven, como en el caso anterior, del todo convincentes como para asegurar que convergen. Todas las distribuciones tienen en la punta de la densidad un "hoyo". Esto podría sugerir que se necesitan más de 20,000 iteraciones para poder obtener una mejor estimación. 
+
+```{r}
+summary(sample2)
+```
+
+Los coeficientes lucen igualmente similares a los de la regresión anterior y a los de la frecuentista. Además, los 3 coeficientes resultan estadísticamente significativos. 
+
+```{r}
+# Convergencia
+gelman.plot(sample2) # Todas convergen
+```
+
+La gráfica de Gelman nos asegura una convergencia. Hay que destacar que en cuanto al coeficiente _Beta1_ su convergencia se da más tardiamente respecto a los otros dos coeficientes. Esto podría sugerir quemás más datos. 
+
+```{r}
+xj2 = cbind(rep(1,n),x3,x4)
+aux_j2 = colMeans(do.call(rbind,sample2))
+aux_params_j2 = c(aux_j2[3],aux_j2[1:2])
+yhat2 = drop(xj2 %*% aux_params_j2)
+probas_j2 = pnorm(yhat2) 
+
+# Matriz de confusión
+jags.aux.j2 = ifelse(probas_j2 >= 0.5,1,0)
+
+table(y, jags.aux.j2) # Igual que el frecuentista
+```
+
+Se da exactamente el mismo resultado que en la frecuentista y en la anterior. 
+
+
+# CONCLUSIÓN
+
+Como punto de partida se puede calcular un modelo frecuentista para posteriormente tomarlos como información a priori. Así fue pues como se concluyó que las variables _x3_ y _x4_ fueron las que más describian la varianza de la variable _y_. 
+
+Se calcularon 3 modelos bayesianos:
+
+1. El primer modelo tuvo distribuciones a priori poco informativas (Normal(0,1)). Los parámetros, exceptuando _Beta2_, diferieron en valor a los frecuentistas; lo que es más, la constante resultó estadísticamente cero. No obstante, los resultados en la tabla de confusión con un punto de corte 0.5 fueron casi identicos al bayesiano. 
+
+2. El segundo modelo tuvo distribuciones más representativas (Normal( _Parámetro_frecuentista _, 1 )). En esta simulación los parámetros fueron muy similares a los frecuentistas. Mejor aún, los resultados en la tabla de confusión fueron los mismos que en el modelo frecuentista. Esto definitivamente representa la utilidad del enfoque bayesiano, aprovechando información previa se pudo llegar a un modelo similar con el mismo poder predictivo pero aprovechando la bondad de que los intervalos son probabilisticos.
+
+3. El tercer modelo fue igual al anterior pero con una variable latente. En este caso se comportó exactamente igual que al anterior y por lo tanto, es muy parecido al frecuentista. 
+

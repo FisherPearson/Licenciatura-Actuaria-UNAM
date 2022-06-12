@@ -1,0 +1,181 @@
+---
+title: "Tarea 1: Paradigma Bayesiano"
+author: |
+  | David Montaño Castro
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+  word_document: default
+header-includes:
+- \usepackage{enumitem}
+- \usepackage{caption}
+- \usepackage{amsmath}
+- \captionsetup{labelformat=empty}
+---
+
+```{r setup,echo=F}
+knitr::opts_chunk$set(echo=T, message=FALSE, warning=FALSE, 
+                      out.width='100%', fig.align='center', eval=T)
+```
+
+Sea $x_1,...,x_n$ una muestra de v.a.i.i.d $Binneg(r, \theta)$, donde $x_i = 1,2,...$ para $i = 1,...,n$ y los parámetros son tales que $\theta \in (0,1)$ y $r \in \mathbb{N}^+$, 
+$$
+f(x) = \binom{r+x-1}{r-1} (1- \theta)^x \theta^r
+$$
+
+1. Calcule la distribución final (a postoriori) de $\theta$, es decir $f(\theta|\underline{x})$. Considerando la distribución inicial conjugada Beta, es decir, $\theta \sim Beta(\alpha_0, \beta_0)$ donde $\alpha_0 \text{ y } \beta_0$ son los hiperparémetros (valores fijos), es decir,
+
+$$
+f(\theta) \propto \theta^{\alpha_0 -1} (1-\theta)^{\beta_0 -1}
+$$
+__RESPUESTA__
+
+a) Función de verosimilitud
+
+$$
+\begin{aligned}
+L(\theta|\underline{x}) & = \prod_{i = 1}^{n} \binom{r + x_i -1}{r - 1} (1-\theta)^{x_i}        \theta^r \\
+& = \binom{r + x_i -1}{r - 1}^n (1-\theta)^{\sum_{i=1}^{n} x_i} \theta^{nr} \\
+& \propto \textcolor{blue}{(1-\theta)^{\sum_{i=1}^{n} x_i} \theta^{nr}} 
+\end{aligned}
+$$
+
+b) Función a priori
+
+$$
+f(\theta) \propto \textcolor{red}{\theta^{\alpha_0 - 1} (1-\theta)^{\beta_0 - 1}}
+$$
+Realizando las siguientes cuentas:
+
+$$
+\begin{aligned}
+\mathbb{P}(\theta|\underline{x}) & = L(\theta|\underline{x}) f(\theta) \\
+& \propto \textcolor{blue}{(1-\theta)^{\sum_{i=1}^{n} x_i} \theta^{nr}} \textcolor{red}{\theta^{\alpha_0 - 1} (1-\theta)^{\beta_0 - 1}}  \\
+& \propto (1-\theta)^{\beta_0 +\sum_{i=1}^{n} x_i} \theta^{\alpha_0 + nr - 1}
+\end{aligned}
+$$
+
+Y así:
+
+$$
+\therefore \theta \sim Beta(\alpha_0 + nr,\beta_0 +\sum_{i=1}^{n} x_i )
+$$
+
+
+2. Se requiere obtener la predicción de una "nueva" observación $Z$. Calcule:
+
+__RESPUESTA__
+
+- __La distribución predictiva inicial de $Z, f(z)$.__
+
+$$
+\begin{aligned}
+f(x) & = \int_{\Theta}{\mathbb{P}(x|\theta)\mathbb{P}(\theta) d\theta}\\
+& = \int_{0}^{1}{\binom{r+x-1}{r-1}}(1-\theta)^x \theta^r \frac{\theta^{\alpha_0 - 1}(1- \theta)^{\beta_0 -1}}{B(\alpha_0,\beta_0)} d\theta \\
+& = \frac{\binom{r+x-1}{r-1}}{B(\alpha_0,\beta_0)} \int_0^1 {\theta^{r+\alpha_0 -1}(1-\theta)^{x+\beta_0 -1}} d\theta \\
+\text{Completar Beta}& = \frac{\binom{r+x-1}{r-1}}{B(\alpha_0,\beta_0)} B(r+\alpha_0, x + \beta_0) \int_0^1 \frac{{\theta^{r+\alpha_0 -1}(1-\theta)^{x+\beta_0 -1}}}{B(r+\alpha_0, x + \beta_0)}d\theta \\
+& = \frac{\binom{r+x-1}{r-1}}{B(\alpha_0,\beta_0)} B(r+\alpha_0, x + \beta_0) \\
+Gammas & = \frac{\Gamma(r+x)\Gamma(r + \alpha_0)\Gamma(x + \beta_0)\Gamma(\alpha_0 + \beta_0)}{\Gamma(r)x!\Gamma(r + x + \alpha_0 + \beta_0)\Gamma(\alpha_0)\Gamma(\beta_0)}
+\end{aligned}
+$$
+
+
+
+- __La distribución predictiva final de $Z, f(z|\underline{x})$__
+
+Definiré $\alpha_1 = \alpha_0 + nr \text{ y } \beta_1 = \beta_0 +\sum_{i=1}^{n} x_i.$
+
+$$
+\begin{aligned}
+f(x^*|\underline{x}) & = \int_{\Theta}{\mathbb{P}(x|\theta)\mathbb{P}(\theta|\underline{x}) d\theta}\\
+& = \int_{0}^{1}{\binom{r+x^*-1}{r-1}}(1-\theta)^{x^*} \theta^r \frac{\theta^{\alpha_1 - 1}(1- \theta)^{\beta_1 -1}}{B(\alpha_1,\beta_1)} d\theta \\
+& = \frac{\binom{r+x^*-1}{r-1}}{B(\alpha_1,\beta_1)} \int_0^1 {\theta^{r+\alpha_1-1}(1-\theta)^{x+\beta_1 -1}} d\theta \\
+\text{Completar Beta}& = \frac{\binom{r+x^*-1}{r-1}}{B(\alpha_1,\beta_1)} B(r+\alpha_1, x^* + \beta_1) \int_0^1 \frac{{\theta^{r+\alpha_1 -1}(1-\theta)^{x+\beta_1 -1}}}{B(r+\alpha_1, x + \beta_1)}d\theta \\
+& = \frac{\binom{r+x^*-1}{r-1}}{B(\alpha_1,\beta_1)} B(r+\alpha_1, x^* + \beta_1) \\
+Gammas & = \frac{\Gamma(r+x^*)\Gamma(r + \alpha_1)\Gamma(x + \beta_1)\Gamma(\alpha_1 + \beta_1)}{\Gamma(r)x^*!\Gamma(r + x^* + \alpha_1 + \beta_1)\Gamma(\alpha_1)\Gamma(\beta_1)} \\
+& = \frac{\Gamma(r+x^*)\Gamma(r + \alpha_0 + nr)\Gamma(x + \beta_0 +\sum_{i=1}^{n} x_i)\Gamma(\alpha_0 + nr + \beta_0 +\sum_{i=1}^{n} x_i)}{\Gamma(r)x^*!\Gamma(r + x^* + \alpha_0 + nr + \beta_0 +\sum_{i=1}^{n} x_i)\Gamma(\alpha_0 + nr)\Gamma(\beta_0 +\sum_{i=1}^{n} x_i)}
+\end{aligned}
+$$
+
+_Hint: Las distribuciones predictivas pertenecen a la familia de distribuciones [Beta-Binomial-Negativa](https://en.wikipedia.org/wiki/Beta_negative_binomial_distribution)_
+
+
+3. Usando los resultados de (1) y (2), especifique valores para los hiperparámetros de la verosimilitud y la distribución inicial, simula una muestra y grafique las distribuciones: $f(\theta), f(\theta|\underline{x}), f(z) \text{ y } f(z|\underline{x})$.
+
+```{r echo=FALSE}
+library(extraDistr)
+set.seed(8)
+```
+
+## PRIORI, VEROSIMILITUD Y POSTERIORI
+
+```{r comment=NA, fig.height=10, fig.width=15}
+n = 20 # Número de muestras
+
+r = 3 # Parámetro Binomial Negativa
+
+theta = .4 # Parámetro Binomial Negativa sobre el que se encontrará distribución
+
+alpha0 = 8 # Hiperparámetro Beta
+
+beta0 = 6.5 # Hiperparámetro Beta
+
+p = seq(0,1,0.01) # Probabilidades para primera gráfica
+
+x = 0:n # valores para segunda gráfica
+
+YY = c(0,round(n/3),round(2*n/3),n) # Numero de muestra iterativa
+
+par(mfrow=c(2,2))
+for(j in 1:4){
+  n = YY[j]
+  
+  # Muestra Binomial negativa
+  X = rnbinom(n = n, size = r, prob = theta)
+  
+  # Priori
+  Prior = dbeta(x = p, shape1 = alpha0, shape2 = beta0)
+  
+  # Verosimilitud
+  verosimilitud = dbeta(x = p, shape1 = n*r + 1, shape2 = sum(X) + 1)
+  
+  # Posteriori
+  Posterior = dbeta(x = p, shape1 = alpha0 + n * r, shape2 = beta0 + sum(X))
+  
+  
+  plot(x = p, y = Prior,xlab = expression(theta), ylab = "Densidad", col = "red", type = "l", ylim = c(0,15), lty=1, lwd=4,main=paste0("Muestra N=",n)) # "Prior"
+  
+  lines(p,verosimilitud, col = "black", lty=2, lwd=4) # "Verosimilitud"
+  
+  lines(p,Posterior, col = "blue",lty=3, lwd=4) # "Posteriori"
+  
+  legend("topright", legend=c("Prior","Verosimilitud","Posterior"), lty=c(1,2,3), col=c("red","black","blue"), lwd=2)
+}
+```
+
+
+## PREDICTIVA INICIAL Y PREDICTIVA FINAL
+
+```{r comment=NA, fig.height=15, fig.width=15}
+par(mfrow = c(2,2))
+for(j in 1:4){
+  n = YY[j]
+  
+  # Muestra Binomial negativa
+  X = rnbinom(n = n, size = r, prob = theta)
+  
+  # predictiva inicial
+  predict_inicial = dbnbinom(x = x, size = r, alpha = alpha0, beta = beta0)
+  
+  # predictiva final
+  predict_final = dbnbinom(x = x, size = r, alpha = n*r + alpha0, beta = beta0 + sum(X))
+  
+  plot(x, predict_inicial, col = "black",ylab="Densidad",type="h",lwd=2, main=paste0("Muestra N=",n)) # "Predictiva Inicial"
+  
+  points(x, predict_final, col="blue",pch=19,cex=1.5) # "Predictiva Final"
+  
+  legend("topleft", legend=c("Predictiva Prior","Predictiva Posterior"), lty=c(1,NA), col=c("black","blue"), pch=c(NA,19))
+}
+```
+

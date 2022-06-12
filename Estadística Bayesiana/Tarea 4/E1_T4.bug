@@ -1,0 +1,16 @@
+/*
+Ejercicio 1 Tarea 4
+*/
+ 
+model{
+
+### Verosimilitud
+
+	X ~ dbin(p,n)
+
+### Prior
+
+	theta ~ dnorm(theta0,tau2inv)
+	p = exp(theta)/(1 + exp(theta))
+
+}

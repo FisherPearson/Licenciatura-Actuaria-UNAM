@@ -1,0 +1,19 @@
+model{
+
+###### Likelihood
+
+for(i in 1:n){
+
+eta[i] = Beta[1] + Beta[2] * x1[i] + Beta[3] * x2[i]
+
+y[i] ~ dnorm(eta[i], Tau)
+}
+
+###### Priors
+
+Beta ~ dmnorm(zeros, diagonal)
+Tau ~ dgamma(1,1)
+Sigma2 = 1/Tau
+
+
+}
